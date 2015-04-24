@@ -3,6 +3,7 @@ include_once "Item.php";
 
 class Podcast {
     protected $built_once = FALSE;
+    public $version = "1.1";
     public $changed = FALSE;
     public $itunes_ns = "http://www.itunes.com/dtds/podcast-1.0.dtd";
     public $title = "";
@@ -16,7 +17,7 @@ class Podcast {
     public $managingEditor = "";
     public $pubDate = "";
     public $webMaster = "";
-    public $generator = "Freedom Controller";
+    public $generator = "FreePod";
     public $itunes_subtitle = "";
     public $itunes_summary = "";
     public $itunes_categories = array();
@@ -59,6 +60,8 @@ class Podcast {
         //Dates
         $this->lastBuildDate = $this->pubDate();
         $this->pubDate = $this->lastBuildDate;
+	//Other
+	$this->generator = $this->generator." v".$this->version;
 
         return(TRUE);
     }

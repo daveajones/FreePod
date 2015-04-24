@@ -2,7 +2,7 @@
 /*
 	This is a sample script that builds the No Agenda show podcast feed.  It's a complex feed
 	so it's good to use as an example. #itm
-/*
+*/
 
 
 //Bring in the FreePod classes
@@ -12,7 +12,7 @@ include_once "Podcast.php";
 $podcast = new Podcast("No Agenda", "A show about politics with No Agenda, by Adam Curry and John C. Dvorak", "http://noagendashow.com/");
 
 //Set individual item values with setValue
-$podcast->setValue("generator", "FreePod");
+$podcast->setValue("generator", "My Feed Builder v1");
 
 //Add some feed level categories
 $podcast->addCategory("News & Politics");
