@@ -7,4 +7,8 @@ It attempts to get album art length/width automatically, as well as enclosure le
 
 The sample script shows how to build a feed and how to use the code.  It's very simple, so that's the first place to start.  You can really just download the sample, makes some tweaks and go live.  :-)
 
+Here's a screenshot of what's produced:
+
+![Screenshot](https://raw.githubusercontent.com/daveajones/FreePod/master/screenshot.png "Screenshot of Sample Feed")
+
 Enjoy!
