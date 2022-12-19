@@ -1,11 +1,12 @@
 <?php
 include_once "Item.php";
+include_once "LiveItem.php";
 
 class Podcast {
     protected $built_once = FALSE;
-    public $version = "1.1";
     public $changed = FALSE;
     public $itunes_ns = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+    public $podcast_ns = "https://podcastindex.org/namespace/1.0";
     public $title = "";
     public $description = "";
     public $link = "";
@@ -18,6 +19,12 @@ class Podcast {
     public $pubDate = "";
     public $webMaster = "";
     public $generator = "FreePod";
+    public $podcast_locked = array(
+        "locked" => "yes",
+        "owner" => ""
+    );
+    public $podcast_funding_url = "";
+    public $podcast_funding_text = "";
     public $itunes_subtitle = "";
     public $itunes_summary = "";
     public $itunes_categories = array();
@@ -39,8 +46,15 @@ class Podcast {
     );
     protected $xmlFeed = NULL;
     protected $items = array();
+    protected $liveItems = array();
     protected $channel = NULL;
     protected $hash = NULL;
+    public $value = array(
+        "type" => "lightning",
+        "method" => "keysend",
+        "suggested" => "0.00000005000"
+    );
+    public $valueRecipients = array();
 
 
     public function __construct( $title = "", $description = "", $link = "" ) {
@@ -49,7 +63,10 @@ class Podcast {
         if(empty($link)) return FALSE;
 
         //Create the xml feed
-        $this->xmlFeed = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><rss xmlns:itunes="'.$this->itunes_ns.'" version="2.0"></rss>');
+        $this->xmlFeed = new SimpleXMLElement(
+            '<?xml version="1.0" encoding="UTF-8"?>
+                  <rss xmlns:itunes="'.$this->itunes_ns.'" xmlns:podcast="'.$this->podcast_ns.'" version="2.0"></rss>'
+        );
         //Channel
         $this->xmlFeed->addChild("channel");
         $this->channel = $this->xmlFeed->channel;
@@ -60,8 +77,6 @@ class Podcast {
         //Dates
         $this->lastBuildDate = $this->pubDate();
         $this->pubDate = $this->lastBuildDate;
-	//Other
-	$this->generator = $this->generator." v".$this->version;
 
         return(TRUE);
     }
@@ -79,7 +94,27 @@ class Podcast {
         return($item);
     }
 
+    public function newLiveItem( $title = "", $description = "", $link = "", $guid = "" ) {
+        $this->changed = TRUE;
+        $item = new LiveItem($title, $description, $link, $guid);
+        //Set some defaults
+        $item->author = $this->managingEditor;
+        $item->itunes_author = $this->itunes_author;
+        $item->itunes_explicit = $this->itunes_explicit;
+        $item->pubDate = $this->pubDate();
+        $this->liveItems[] = $item;
+
+        return($item);
+    }
+
     private function addItem( Item $item ) {
+        //Convert channel to a DOM element and import item into it
+        $domchannel = dom_import_simplexml($this->xmlFeed->channel);
+        $domnew = $domchannel->ownerDocument->importNode($item->domObject(), TRUE);
+        $domchannel->appendChild($domnew);
+    }
+
+    private function addLiveItem( LiveItem $item ) {
         //Convert channel to a DOM element and import item into it
         $domchannel = dom_import_simplexml($this->xmlFeed->channel);
         $domnew = $domchannel->ownerDocument->importNode($item->domObject(), TRUE);
@@ -89,7 +124,7 @@ class Podcast {
     protected function removeNodes( $val, $ns = "" ) {
         //echo "removeNodes(".$val.",".$ns.")\n";
         if(!empty($ns)) {
-            $this->xmlFeed->registerXPathNamespace("default", $this->itunes_ns);
+            $this->xmlFeed->registerXPathNamespace("default", $ns);
             $nsp = "default:";
         } else {
             $nsp = "";
@@ -103,7 +138,7 @@ class Podcast {
 
         foreach ( $nsnodes as $child )
         {
-            if($child) {
+            if(isset($child)) {
                 //echo print_r($child, TRUE);
                 unset($child[0]);
             }
@@ -153,7 +188,7 @@ class Podcast {
             $dom->preserveWhiteSpace = false;
             $dom->formatOutput = true;
             $dom->loadXML($this->xmlFeed->asXML());
-            return $dom->saveXML();
+            return str_replace(' xmlns=""', '', $dom->saveXML());
         } else {
             return $this->xmlFeed->asXML();
         }
@@ -192,13 +227,11 @@ class Podcast {
         $this->xmlFeed->channel->description = $this->description;
         $this->xmlFeed->channel->link = $this->link;
         //Add categories
-        $ctg = "";
-        foreach( $this->categories as $cat ) {
-            $ctg = $ctg . " " . $cat;
-        }
-        if(!empty($ctg)) {
-            $this->xmlFeed->channel->category = trim($ctg);
-        }
+//        $ctg = "";
+//        foreach( $this->categories as $cat ) {
+//            $category_node = $this->xmlFeed->channel->addChild("category", "", $this->itunes_ns);
+//            $category_node->addAttribute("text", trim($cat));
+//        }
         //Copyright
         if(!empty($this->copyright)) {
             $this->xmlFeed->channel->copyright = $this->copyright;
@@ -215,6 +248,22 @@ class Podcast {
             $this->xmlFeed->channel->lastBuildDate = $this->lastBuildDate;
         }
 
+        //Locked
+        if(!empty($this->itunes_owner['email'])) {
+            $lockTag = $this->xmlFeed->channel->addChild('locked', "yes", $this->podcast_ns);
+            $lockTag->addAttribute("owner", $this->itunes_owner['email']);
+        }
+
+        //Funding
+        if(!empty($this->podcast_funding_url) && isset($this->podcast_funding_text)) {
+            $fundingTag = $this->xmlFeed->channel->addChild(
+                'funding',
+                (string)$this->podcast_funding_text,
+                $this->podcast_ns
+            );
+            $fundingTag->addAttribute("url", $this->podcast_funding_url);
+        }
+
         //Names
         if(!empty($this->managingEditor)) {
             $this->xmlFeed->channel->managingEditor = $this->managingEditor;
@@ -228,14 +277,20 @@ class Podcast {
         //System
         $this->xmlFeed->channel->generator = $this->generator;
         if(!empty($this->itunes_owner['email']) || !empty($this->managingEditor)) {
-            $this->xmlFeed->channel->addChild('owner', "", "http://www.itunes.com/dtds/podcast-1.0.dtd");
+            $this->xmlFeed->channel->addChild('owner', "", $this->itunes_ns);
             if(empty($this->itunes_owner['email'])) {
                 $this->itunes_owner['email'] = $this->managingEditor;
             }
-            $this->xmlFeed->channel->children('itunes', TRUE)->owner->email = $this->itunes_owner['email'];
+            $this->xmlFeed->channel->children(
+                'itunes',
+                TRUE
+            )->owner->email = $this->itunes_owner['email'];
         }
         if(!empty($this->itunes_owner['name'])) {
-            $this->xmlFeed->channel->children('itunes', TRUE)->owner->name = $this->itunes_owner['name'];
+            $this->xmlFeed->channel->children(
+                'itunes',
+                TRUE
+            )->owner->name = $this->itunes_owner['name'];
         }
         //Album art
         if(!empty($this->itunes_image) || !empty($this->image['url'])) {
@@ -255,13 +310,21 @@ class Podcast {
                 $this->image['description'] = $this->description;
             }
             $this->xmlFeed->channel->image->description = $this->image['description'];
-            if(empty($this->image['width']) || empty($this->image['height']) ) {
+            if((empty($this->image['width']) || empty($this->image['height'])) && !empty($this->image['url']) ) {
                 list($width, $height, $type, $attr) = getimagesize($this->image['url']);
                 $this->image['width'] = $width;
                 $this->image['height'] = $height;
             }
-            $this->xmlFeed->channel->image->width = $this->image['width'];
-            $this->xmlFeed->channel->image->height = $this->image['height'];
+            if($this->image['width'] > 144) {
+                $this->image['width'] = 144;
+            }
+            if($this->image['height'] > 144) {
+                $this->image['height'] = 144;
+            }
+            if(!empty($this->image['width']) || !empty($this->image['height'])) {
+                $this->xmlFeed->channel->image->width = $this->image['width'];
+                $this->xmlFeed->channel->image->height = $this->image['height'];
+            }
         }
 
         //Itunes stuff
@@ -295,6 +358,24 @@ class Podcast {
         $this->xmlFeed->channel->addChild('explicit', "", $this->itunes_ns);
         $this->xmlFeed->channel->children('itunes', TRUE)->explicit = $this->itunes_explicit;
 
+        //Itunes keywords
+        if(!empty($this->itunes_keywords)) {
+            $itksize = 0;
+            $itk = "";
+            foreach($this->itunes_keywords as $kw) {
+                $itksize += strlen($kw.",");
+                if($itksize > 255) {
+                    break;
+                }
+                $itk = $itk . "," . $kw;
+            }
+            $this->xmlFeed->channel->addChild('keywords', "", $this->itunes_ns);
+            $this->xmlFeed->channel->children('itunes', TRUE)->keywords = trim(
+                $itk,
+                " ,"
+            );
+        }
+
         //Itunes categories
         if(empty($this->itunes_categories)) {
             //Split category value into an array and add as itunes_category values
@@ -303,8 +384,37 @@ class Podcast {
         $count = 0;
         foreach($this->itunes_categories as $cat) {
             $this->xmlFeed->channel->addChild('category', "", $this->itunes_ns);
-            $this->xmlFeed->channel->children('itunes', TRUE)->category[$count] = $cat;
+            $this->xmlFeed->channel->children(
+                'itunes',
+                TRUE
+            )->category[$count]->addAttribute("text", $cat);
             $count++;
+        }
+
+        //Value
+        if(count($this->valueRecipients) > 0 ) {
+            $valueTag = $this->xmlFeed->channel->addChild('value', NULL, $this->podcast_ns);
+            $count = 0;
+            foreach($this->valueRecipients as $recipient) {
+                $valRec = $valueTag->addChild('valueRecipient', NULL, $this->podcast_ns);
+                $valRec->addAttribute('name', $recipient['name']);
+                $valRec->addAttribute('type', $recipient['type']);
+                $valRec->addAttribute('address', $recipient['address']);
+                if(isset($recipient['customKey']) && !empty($recipient['customKey'])) {
+                    $valRec->addAttribute('customKey', $recipient['customKey']);
+                }
+                if(isset($recipient['customValue']) && !empty($recipient['customValue'])) {
+                    $valRec->addAttribute('customValue', $recipient['customValue']);
+                }
+                $valRec->addAttribute('split', $recipient['split']);
+                $count++;
+            }
+        }
+
+        //Add all of the live items
+        foreach($this->liveItems as $item) {
+            $this->addLiveItem($item);
+            $this->lastBuildDate = $item->pubDate;
         }
 
         //Add all of the items
