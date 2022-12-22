@@ -25,6 +25,23 @@ class Podcast {
     );
     public $podcast_funding_url = "";
     public $podcast_funding_text = "";
+    public $podcast_guid = "";
+    public $podcast_person = array(
+        "name" => "",
+        "role" => "",
+        "group" => "",
+        "img" => "",
+        "href" => "",
+    );
+    public $podcast_persons = array();
+    public $podcast_location = "";
+    public $podcast_medium = "";
+    public $podcast_social_interact = array(
+        "protocol" => "activitypub",
+        "uri" => "",
+        "accountId" => "",
+        "accountUrl" => "",
+    );
     public $itunes_subtitle = "";
     public $itunes_summary = "";
     public $itunes_categories = array();
@@ -94,9 +111,10 @@ class Podcast {
         return($item);
     }
 
-    public function newLiveItem( $title = "", $description = "", $link = "", $guid = "" ) {
+    public function newLiveItem( $title = "", $description = "", $link = "", $guid = "", $status = "pending",
+    $start = "", $end = "", $chat = "") {
         $this->changed = TRUE;
-        $item = new LiveItem($title, $description, $link, $guid);
+        $item = new LiveItem($title, $description, $link, $guid, $status, $start, $end, $chat);
         //Set some defaults
         $item->author = $this->managingEditor;
         $item->itunes_author = $this->itunes_author;
@@ -391,9 +409,42 @@ class Podcast {
             $count++;
         }
 
+        //Locations
+        if(!empty($this->podcast_location)) {
+            $this->xmlFeed->channel->addChild('location', $this->podcast_location, $this->podcast_ns);
+        }
+
+        //Persons
+        if(!empty($this->podcast_person['name'])) {
+            $person = $this->xmlFeed->channel->addChild(
+                'person',
+                $this->podcast_person['name'],
+                $this->podcast_ns
+            );
+            if(!empty($this->podcast_person['img'])) {
+                $person->addAttribute('img', $this->podcast_person['img']);
+            }
+            if(!empty($this->podcast_person['href'])) {
+                $person->addAttribute('href', $this->podcast_person['href']);
+            }
+        }
+
+        //Guid
+        if(!empty($this->podcast_guid)) {
+            $this->xmlFeed->channel->addChild('guid', $this->podcast_guid, $this->podcast_ns);
+        }
+
+        //Medium
+        if(!empty($this->podcast_medium)) {
+            $this->xmlFeed->channel->addChild('medium', $this->podcast_medium, $this->podcast_ns);
+        }
+
         //Value
         if(count($this->valueRecipients) > 0 ) {
             $valueTag = $this->xmlFeed->channel->addChild('value', NULL, $this->podcast_ns);
+            $valueTag->addAttribute('type', 'lightning');
+            $valueTag->addAttribute('method', 'keysend');
+            $valueTag->addAttribute('suggested', '0.00000005000');
             $count = 0;
             foreach($this->valueRecipients as $recipient) {
                 $valRec = $valueTag->addChild('valueRecipient', NULL, $this->podcast_ns);
@@ -413,7 +464,8 @@ class Podcast {
 
         //Add all of the live items
         foreach($this->liveItems as $item) {
-            $this->addLiveItem($item);
+            $liveItem = $this->addLiveItem($item);
+            $liveItem['start'] = $item->start;
             $this->lastBuildDate = $item->pubDate;
         }
 

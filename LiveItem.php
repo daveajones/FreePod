@@ -16,21 +16,46 @@ class LiveItem extends Podcast {
     public $itunes_duration = "";
     public $podcast_chapters_url = "";
     public $podcast_transcript_url = "";
+    public $status = "pending";
+    public $chat = "";
+    public $start = "";
+    public $end = "";
 
 
-    public function __construct( $title = "", $description = "", $link = "", $guid = "") {
+    public function __construct(
+        $title = "",
+        $description = "",
+        $link = "",
+        $guid = "",
+        $status = "pending",
+        $start = "",
+        $end = "",
+        $chat = ""
+    ) {
         //Check default params
         if(empty($title) && empty($description)) return FALSE;
 
         //Create the xml
-        $this->xmlFeed = new SimpleXMLElement(
+        $liveItem = $this->xmlFeed = new SimpleXMLElement(
             '<podcast:liveItem xmlns:itunes="'.$this->itunes_ns.'" xmlns:podcast="'.$this->podcast_ns.'" >
             </podcast:liveItem>'
         );
 
+        $this->status = $status;
+        $this->start = $start;
+        $this->end = $end;
+        $this->chat = $chat;
+
         $this->title = $title;
         $this->description = $description;
         $this->link = $link;
+
+        $liveItem->addAttribute('status', $this->status);
+        $liveItem->addAttribute('start', $this->start);
+        $liveItem->addAttribute('end', $this->end);
+        if(!empty($this->chat)) {
+            $liveItem->addAttribute('chat', $this->chat);
+        }
 
         //Check the guid
         if(!empty($guid) || !empty($link)) {
@@ -178,6 +203,41 @@ class LiveItem extends Podcast {
             }
             $this->xmlFeed->addChild('keywords', "", $this->itunes_ns);
             $this->xmlFeed->children('itunes', TRUE)->keywords = trim($itk, " ,");
+        }
+
+        //Locations
+        if(!empty($this->podcast_location)) {
+            $this->xmlFeed->addChild('location', $this->podcast_location, $this->podcast_ns);
+        }
+
+        //Persons
+        if(!empty($this->podcast_person['name'])) {
+            $person = $this->xmlFeed->addChild('person', $this->podcast_person['name'], $this->podcast_ns);
+            if(!empty($this->podcast_person['img'])) {
+                $person->addAttribute('img', $this->podcast_person['img']);
+            }
+            if(!empty($this->podcast_person['href'])) {
+                $person->addAttribute('href', $this->podcast_person['href']);
+            }
+        }
+
+        //Social Interact
+        if(!empty($this->podcast_social_interact['uri'])) {
+            $social = $this->xmlFeed->addChild(
+                'socialInteract',
+                '',
+                $this->podcast_ns
+            );
+            if(!empty($this->podcast_social_interact['protocol'])) {
+                $social->addAttribute('protocol', $this->podcast_social_interact['protocol']);
+            }
+            $social->addAttribute('uri', $this->podcast_social_interact['uri']);
+            if(!empty($this->podcast_social_interact['accountId'])) {
+                $social->addAttribute('accountId', $this->podcast_social_interact['accountId']);
+            }
+            if(!empty($this->podcast_social_interact['accountUrl'])) {
+                $social->addAttribute('accountUrl', $this->podcast_social_interact['accountUrl']);
+            }
         }
 
         //Enclosures

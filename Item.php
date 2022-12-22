@@ -179,6 +179,41 @@ class Item extends Podcast {
             $this->xmlFeed->children('itunes', TRUE)->keywords = trim($itk, " ,");
         }
 
+        //Locations
+        if(!empty($this->podcast_location)) {
+            $this->xmlFeed->addChild('location', $this->podcast_location, $this->podcast_ns);
+        }
+
+        //Persons
+        if(!empty($this->podcast_person['name'])) {
+            $person = $this->xmlFeed->addChild('person', $this->podcast_person['name'], $this->podcast_ns);
+            if(!empty($this->podcast_person['img'])) {
+                $person->addAttribute('img', $this->podcast_person['img']);
+            }
+            if(!empty($this->podcast_person['href'])) {
+                $person->addAttribute('href', $this->podcast_person['href']);
+            }
+        }
+
+        //Social Interact
+        if(!empty($this->podcast_social_interact['uri'])) {
+            $social = $this->xmlFeed->addChild(
+                'socialInteract',
+                '',
+                $this->podcast_ns
+            );
+            if(!empty($this->podcast_social_interact['protocol'])) {
+                $social->addAttribute('protocol', $this->podcast_social_interact['protocol']);
+            }
+            $social->addAttribute('uri', $this->podcast_social_interact['uri']);
+            if(!empty($this->podcast_social_interact['accountId'])) {
+                $social->addAttribute('accountId', $this->podcast_social_interact['accountId']);
+            }
+            if(!empty($this->podcast_social_interact['accountUrl'])) {
+                $social->addAttribute('accountUrl', $this->podcast_social_interact['accountUrl']);
+            }
+        }
+
         //Enclosures
         $count = 0;
         foreach($this->enclosures as $enclosure) {
